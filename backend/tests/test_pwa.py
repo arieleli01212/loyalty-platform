@@ -14,7 +14,9 @@ from app.models.loyalty_card import LoyaltyCard
 # ---------------------------------------------------------------------------
 
 async def _register_and_enroll(client: AsyncClient, *, email: str, biz_name: str):
-    """Register a user, create a program, enroll a customer. Returns pass_serial."""
+    """Register a user, create a program, enroll a customer via OTP. Returns pass_serial."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
     reg = await client.post("/api/v1/auth/register", json={
         "email": email,
         "password": "testpass123",
@@ -34,10 +36,24 @@ async def _register_and_enroll(client: AsyncClient, *, email: str, biz_name: str
     biz_resp = await client.get("/api/v1/business", headers=headers)
     slug = biz_resp.json()["slug"]
 
-    enroll = await client.post(f"/api/v1/e/{slug}/enroll", json={
+    captured = []
+
+    async def fake_send_otp(to_email, code, business_name):
+        captured.append(code)
+
+    mock_provider = MagicMock()
+    mock_provider.send_otp = fake_send_otp
+
+    with patch("app.api.v1.enrollment.get_email_provider", return_value=mock_provider):
+        await client.post(f"/api/v1/e/{slug}/otp/request", json={
+            "name": "Test Customer",
+            "email": "customer@example.com",
+        })
+
+    enroll = await client.post(f"/api/v1/e/{slug}/otp/verify", json={
         "name": "Test Customer",
-        "contact": "customer@example.com",
-        "contact_type": "email",
+        "email": "customer@example.com",
+        "code": captured[0],
     })
     assert enroll.status_code == 200
     return enroll.json()["pass_serial"]

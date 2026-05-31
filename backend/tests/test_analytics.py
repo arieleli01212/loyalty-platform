@@ -11,7 +11,7 @@ import pytest
 from httpx import AsyncClient
 from sqlmodel import select
 
-from app.models.customer import Customer, ContactType
+from app.models.customer import Customer
 from app.models.loyalty_card import LoyaltyCard, WalletPlatform, CardStatus
 from app.models.scan_event import ScanEvent, ScanType, ScanSource
 from app.models.user import MerchantUser
@@ -34,15 +34,15 @@ async def _create_customer(
     business_id: int,
     *,
     name: str = "Test Customer",
-    contact: str | None = None,
+    email: str | None = None,
     enrollment_channel: str = "web",
     enrolled_at: datetime | None = None,
 ) -> Customer:
     customer = Customer(
         business_id=business_id,
         name=name,
-        contact=contact or f"cust-{secrets.token_hex(4)}@example.com",
-        contact_type=ContactType.email,
+        email=email or f"cust-{secrets.token_hex(4)}@example.com",
+        email_verified=True,
         enrolled_at=enrolled_at or datetime.utcnow(),
         enrollment_channel=enrollment_channel,
     )

@@ -116,7 +116,7 @@ async def loyalty_card(client: AsyncClient, auth_headers, program, test_session)
     import secrets
     import uuid
     from datetime import datetime
-    from app.models.customer import Customer, ContactType
+    from app.models.customer import Customer
     from app.models.loyalty_card import LoyaltyCard, WalletPlatform, CardStatus
     from app.models.user import MerchantUser
     from sqlmodel import select
@@ -132,8 +132,8 @@ async def loyalty_card(client: AsyncClient, auth_headers, program, test_session)
     customer = Customer(
         business_id=business_id,
         name="Test Customer",
-        contact="customer@example.com",
-        contact_type=ContactType.email,
+        email="customer@example.com",
+        email_verified=True,
         enrolled_at=datetime.utcnow(),
         enrollment_channel="web",
     )

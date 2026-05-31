@@ -6,7 +6,7 @@ import pytest
 from httpx import AsyncClient
 from sqlmodel import select
 
-from app.models.customer import Customer, ContactType
+from app.models.customer import Customer
 from app.models.loyalty_card import LoyaltyCard, WalletPlatform, CardStatus
 from app.models.scan_event import ScanEvent, ScanType, ScanSource
 from app.models.user import MerchantUser
@@ -29,8 +29,8 @@ async def create_card_for_user(
     customer = Customer(
         business_id=business_id,
         name="Scan Test Customer",
-        contact=f"scantest-{secrets.token_hex(4)}@example.com",
-        contact_type=ContactType.email,
+        email=f"scantest-{secrets.token_hex(4)}@example.com",
+        email_verified=True,
         enrolled_at=datetime.utcnow(),
         enrollment_channel="web",
     )
@@ -264,8 +264,8 @@ async def test_cross_tenant_scan_rejection(client: AsyncClient, test_session):
     customer1 = Customer(
         business_id=user1.business_id,
         name="Tenant 1 Customer",
-        contact="t1cust@example.com",
-        contact_type=ContactType.email,
+        email="t1cust@example.com",
+        email_verified=True,
         enrolled_at=datetime.utcnow(),
         enrollment_channel="web",
     )
@@ -367,8 +367,8 @@ async def test_complete_register_login_stamp_redeem_cycle(client: AsyncClient, t
     customer = Customer(
         business_id=user.business_id,
         name="Cycle Customer",
-        contact="cyclecust@example.com",
-        contact_type=ContactType.email,
+        email="cyclecust@example.com",
+        email_verified=True,
         enrolled_at=datetime.utcnow(),
         enrollment_channel="web",
     )

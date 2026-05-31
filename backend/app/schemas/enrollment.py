@@ -1,13 +1,23 @@
-from typing import Optional
-from pydantic import BaseModel
-from app.models.customer import ContactType
+from pydantic import BaseModel, EmailStr
 
 
-class EnrollRequest(BaseModel):
+class OtpRequestRequest(BaseModel):
     name: str
-    contact: str
-    contact_type: ContactType
-    enrollment_channel: Optional[str] = "qr"
+    email: EmailStr
+
+
+class OtpRequestResponse(BaseModel):
+    sent: bool = True
+
+
+class OtpVerifyRequest(BaseModel):
+    name: str
+    email: EmailStr
+    code: str
+
+
+class GoogleEnrollRequest(BaseModel):
+    id_token: str
 
 
 class EnrollResponse(BaseModel):
@@ -18,3 +28,5 @@ class EnrollResponse(BaseModel):
     current_stamps: int
     stamps_required: int
     reward_description: str
+    email: str
+    email_verified: bool

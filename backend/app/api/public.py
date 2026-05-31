@@ -21,6 +21,7 @@ from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.config import settings
 from app.db import get_session
 from app.models.business import Business
 from app.models.loyalty_card import LoyaltyCard
@@ -347,6 +348,168 @@ async def pass_icon(
 # GET /e/{business_slug} — Enrollment landing page
 # ---------------------------------------------------------------------------
 
+# The JS logic for the enrollment flow is defined as a *non-f-string* so that
+# Python never processes any quotes or backslashes inside it.  Only the few
+# dynamic values (slug, colors, google_client_id) are spliced in at well-
+# defined injection points after the string is built.  This sidesteps the
+# f-string apostrophe trap documented in CLAUDE.md.
+
+_ENROLL_JS = r"""
+(function() {
+  var SLUG = "%%SLUG%%";
+  var GOOGLE_CLIENT_ID = "%%GOOGLE_CLIENT_ID%%";
+
+  // --- state ---
+  var state = "picker";   // picker | email-form | otp-entry | success
+  var savedName = "";
+  var savedEmail = "";
+
+  // --- element refs ---
+  var picker   = document.getElementById("state-picker");
+  var emailForm= document.getElementById("state-email");
+  var otpForm  = document.getElementById("state-otp");
+  var successEl= document.getElementById("state-success");
+  var msgEl    = document.getElementById("msg");
+
+  function showState(s) {
+    state = s;
+    picker.style.display   = (s === "picker")     ? "" : "none";
+    emailForm.style.display= (s === "email-form") ? "" : "none";
+    otpForm.style.display  = (s === "otp-entry")  ? "" : "none";
+    successEl.style.display= (s === "success")    ? "" : "none";
+    msgEl.textContent = "";
+  }
+
+  function setMsg(text, isError) {
+    msgEl.textContent = text;
+    msgEl.style.color = isError ? "#e53e3e" : "inherit";
+  }
+
+  // --- picker buttons ---
+  var btnEmail  = document.getElementById("btn-use-email");
+  var btnGoogle = document.getElementById("btn-google");
+  if (btnEmail) {
+    btnEmail.addEventListener("click", function() { showState("email-form"); });
+  }
+
+  // --- email form ---
+  var emailFormEl = document.getElementById("form-email");
+  if (emailFormEl) {
+    emailFormEl.addEventListener("submit", async function(e) {
+      e.preventDefault();
+      var fd = new FormData(e.target);
+      savedName  = fd.get("name");
+      savedEmail = fd.get("email");
+      setMsg("Sending code...", false);
+      try {
+        var res = await fetch("/api/v1/e/" + SLUG + "/otp/request", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({name: savedName, email: savedEmail}),
+        });
+        if (res.ok) {
+          showState("otp-entry");
+          var hint = document.getElementById("otp-hint");
+          if (hint) hint.textContent = "We sent a code to " + savedEmail;
+        } else {
+          var err = await res.json();
+          setMsg("Error: " + (err.detail || "Something went wrong."), true);
+        }
+      } catch(ex) {
+        setMsg("Network error — please try again.", true);
+      }
+    });
+  }
+
+  // --- OTP form ---
+  var otpFormEl = document.getElementById("form-otp");
+  if (otpFormEl) {
+    otpFormEl.addEventListener("submit", async function(e) {
+      e.preventDefault();
+      var fd = new FormData(e.target);
+      var code = fd.get("code");
+      setMsg("Verifying...", false);
+      try {
+        var res = await fetch("/api/v1/e/" + SLUG + "/otp/verify", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({name: savedName, email: savedEmail, code: code}),
+        });
+        if (res.ok) {
+          var data = await res.json();
+          showState("success");
+          var link = document.getElementById("card-link");
+          if (link) { link.href = data.pass_url; }
+        } else {
+          var err = await res.json();
+          setMsg("Error: " + (err.detail || "Something went wrong."), true);
+        }
+      } catch(ex) {
+        setMsg("Network error — please try again.", true);
+      }
+    });
+  }
+
+  // --- back links ---
+  var backToPickerLinks = document.querySelectorAll(".back-to-picker");
+  backToPickerLinks.forEach(function(el) {
+    el.addEventListener("click", function(e) { e.preventDefault(); showState("picker"); });
+  });
+
+  // --- Google Sign-In ---
+  if (GOOGLE_CLIENT_ID && btnGoogle) {
+    // Load the GSI script dynamically only when needed.
+    window.__googleCallback = async function(response) {
+      setMsg("Signing in with Google...", false);
+      try {
+        var res = await fetch("/api/v1/e/" + SLUG + "/google", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({id_token: response.credential}),
+        });
+        if (res.ok) {
+          var data = await res.json();
+          showState("success");
+          var link = document.getElementById("card-link");
+          if (link) { link.href = data.pass_url; }
+        } else {
+          var err = await res.json();
+          setMsg("Google sign-in failed: " + (err.detail || "Try again."), true);
+          showState("picker");
+        }
+      } catch(ex) {
+        setMsg("Network error — please try again.", true);
+        showState("picker");
+      }
+    };
+
+    btnGoogle.addEventListener("click", function() {
+      // Initialize GSI once the library has loaded.
+      function initAndPrompt() {
+        google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: window.__googleCallback,
+        });
+        google.accounts.id.prompt();
+      }
+      if (typeof google !== "undefined" && google.accounts) {
+        initAndPrompt();
+      } else {
+        var script = document.createElement("script");
+        script.src = "https://accounts.google.com/gsi/client";
+        script.onload = initAndPrompt;
+        document.head.appendChild(script);
+      }
+    });
+  } else if (btnGoogle) {
+    btnGoogle.style.display = "none";
+  }
+
+  showState("picker");
+})();
+"""
+
+
 @router.get("/e/{business_slug}", response_class=HTMLResponse)
 async def enrollment_landing(
     business_slug: str,
@@ -382,7 +545,7 @@ async def enrollment_landing(
     if not program:
         body = f"""
   <div style="text-align:center;max-width:420px;width:100%;">
-    {"<img src='" + business.logo_url + "' alt='logo' style='max-width:120px;margin-bottom:20px;border-radius:12px;'>" if business.logo_url else ""}
+    {"<img src=\"" + business.logo_url + "\" alt=\"logo\" style=\"max-width:120px;margin-bottom:20px;border-radius:12px;\">" if business.logo_url else ""}
     <h1 style="font-size:1.8rem;font-weight:700;margin-bottom:8px;color:{label};">{business.name}</h1>
     <p style="font-size:1rem;margin-top:24px;opacity:0.7;">
       We are not accepting new enrollments right now.<br>Please check back soon!
@@ -390,78 +553,124 @@ async def enrollment_landing(
   </div>"""
         return HTMLResponse(content=_html(business.name, body, bg, fg))
 
-    enroll_path = f"/api/v1/e/{business_slug}/enroll"
+    # Escape values for safe injection into the JS template.
+    # These are inserted into a JS string literal — we only allow safe chars.
+    safe_slug = business_slug.replace('"', "").replace("\\", "")
+    safe_google_client_id = (settings.GOOGLE_CLIENT_ID or "").replace('"', "").replace("\\", "")
+
+    # Splice the dynamic values into the non-f-string JS block.
+    enroll_js = (
+        _ENROLL_JS
+        .replace("%%SLUG%%", safe_slug)
+        .replace("%%GOOGLE_CLIENT_ID%%", safe_google_client_id)
+    )
+
+    # Show/hide Google button based on whether GOOGLE_CLIENT_ID is configured.
+    google_btn_display = "" if settings.GOOGLE_CLIENT_ID else "display:none;"
+
+    logo_html = (
+        '<img src="' + business.logo_url + '" alt="logo" '
+        'style="max-width:120px;margin-bottom:20px;border-radius:12px;">'
+        if business.logo_url else ""
+    )
 
     body = f"""
   <div style="text-align:center;max-width:420px;width:100%;">
-    {"<img src='" + business.logo_url + "' alt='logo' style='max-width:120px;margin-bottom:20px;border-radius:12px;'>" if business.logo_url else ""}
+    {logo_html}
     <h1 style="font-size:1.8rem;font-weight:700;margin-bottom:8px;color:{label};">{business.name}</h1>
     <p style="font-size:1rem;margin-bottom:28px;opacity:0.8;">{program.reward_description}</p>
 
-    <form id="enrollForm" onsubmit="return false"
-          style="display:flex;flex-direction:column;gap:14px;text-align:left;">
-      <label style="font-size:0.85rem;font-weight:600;color:{label};">Your Name
-        <input name="name" type="text" required placeholder="Jane Smith"
-               style="display:block;width:100%;margin-top:4px;padding:12px 14px;
-                      border:1.5px solid {label};border-radius:10px;
-                      background:transparent;color:{fg};font-size:1rem;outline:none;">
-      </label>
-      <label style="font-size:0.85rem;font-weight:600;color:{label};">Email or Phone
-        <input name="contact" type="text" required placeholder="jane@example.com or +1 555 000"
-               style="display:block;width:100%;margin-top:4px;padding:12px 14px;
-                      border:1.5px solid {label};border-radius:10px;
-                      background:transparent;color:{fg};font-size:1rem;outline:none;">
-      </label>
-      <label style="font-size:0.85rem;font-weight:600;color:{label};">Contact Type
-        <select name="contact_type"
-                style="display:block;width:100%;margin-top:4px;padding:12px 14px;
-                       border:1.5px solid {label};border-radius:10px;
-                       background:{bg};color:{fg};font-size:1rem;outline:none;">
-          <option value="email">Email</option>
-          <option value="phone">Phone</option>
-        </select>
-      </label>
-      <button type="submit"
-              style="margin-top:8px;padding:14px;border:none;border-radius:12px;
+    <!-- state: picker -->
+    <div id="state-picker" style="display:flex;flex-direction:column;gap:12px;">
+      <button id="btn-google" type="button"
+              style="{google_btn_display}padding:14px;border:2px solid {label};border-radius:12px;
+                     background:transparent;color:{fg};font-size:1rem;font-weight:600;
+                     cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
+        <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          <path fill="none" d="M0 0h48v48H0z"/>
+        </svg>
+        Sign in with Google
+      </button>
+      <button id="btn-use-email" type="button"
+              style="padding:14px;border:2px solid {label};border-radius:12px;
                      background:{label};color:{bg};font-size:1rem;font-weight:700;
                      cursor:pointer;">
-        Join the programme
+        Use email instead
       </button>
-    </form>
+    </div>
 
-    <div id="msg" style="margin-top:20px;font-size:0.95rem;"></div>
+    <!-- state: email-form -->
+    <div id="state-email" style="display:none;text-align:left;">
+      <form id="form-email" style="display:flex;flex-direction:column;gap:14px;">
+        <label style="font-size:0.85rem;font-weight:600;color:{label};">Your Name
+          <input name="name" type="text" required placeholder="Jane Smith" autocomplete="name"
+                 style="display:block;width:100%;margin-top:4px;padding:12px 14px;
+                        border:1.5px solid {label};border-radius:10px;
+                        background:transparent;color:{fg};font-size:1rem;outline:none;">
+        </label>
+        <label style="font-size:0.85rem;font-weight:600;color:{label};">Email address
+          <input name="email" type="email" required placeholder="jane@example.com" autocomplete="email"
+                 style="display:block;width:100%;margin-top:4px;padding:12px 14px;
+                        border:1.5px solid {label};border-radius:10px;
+                        background:transparent;color:{fg};font-size:1rem;outline:none;">
+        </label>
+        <button type="submit"
+                style="padding:14px;border:none;border-radius:12px;
+                       background:{label};color:{bg};font-size:1rem;font-weight:700;
+                       cursor:pointer;">
+          Send verification code
+        </button>
+      </form>
+      <p style="margin-top:12px;font-size:0.85rem;text-align:center;">
+        <a href="#" class="back-to-picker" style="opacity:0.6;">&#8592; Back</a>
+      </p>
+    </div>
+
+    <!-- state: otp-entry -->
+    <div id="state-otp" style="display:none;text-align:left;">
+      <p id="otp-hint" style="margin-bottom:16px;font-size:0.9rem;opacity:0.75;text-align:center;"></p>
+      <form id="form-otp" style="display:flex;flex-direction:column;gap:14px;">
+        <label style="font-size:0.85rem;font-weight:600;color:{label};">6-digit code
+          <input name="code" type="text" inputmode="numeric" pattern="[0-9]{{6}}" maxlength="6"
+                 required placeholder="123456" autocomplete="one-time-code"
+                 style="display:block;width:100%;margin-top:4px;padding:12px 14px;
+                        border:1.5px solid {label};border-radius:10px;
+                        background:transparent;color:{fg};font-size:1.4rem;
+                        letter-spacing:0.3em;text-align:center;outline:none;">
+        </label>
+        <button type="submit"
+                style="padding:14px;border:none;border-radius:12px;
+                       background:{label};color:{bg};font-size:1rem;font-weight:700;
+                       cursor:pointer;">
+          Verify &amp; join
+        </button>
+      </form>
+      <p style="margin-top:12px;font-size:0.85rem;text-align:center;">
+        <a href="#" class="back-to-picker" style="opacity:0.6;">&#8592; Back</a>
+      </p>
+    </div>
+
+    <!-- state: success -->
+    <div id="state-success" style="display:none;text-align:center;padding:24px 0;">
+      <p style="font-size:1.1rem;font-weight:600;margin-bottom:16px;">
+        &#127881; You&apos;re enrolled!
+      </p>
+      <a id="card-link" href="#"
+         style="display:inline-block;padding:14px 28px;background:{label};
+                color:{bg};border-radius:12px;font-weight:700;font-size:1rem;
+                text-decoration:none;">
+        View your card &#8594;
+      </a>
+    </div>
+
+    <div id="msg" style="margin-top:16px;font-size:0.9rem;min-height:1.2em;"></div>
   </div>
 
-  <script>
-    document.getElementById('enrollForm').addEventListener('submit', async function(e) {{
-      e.preventDefault();
-      const fd = new FormData(e.target);
-      const payload = {{
-        name: fd.get('name'),
-        contact: fd.get('contact'),
-        contact_type: fd.get('contact_type'),
-        enrollment_channel: 'qr',
-      }};
-      const msg = document.getElementById('msg');
-      try {{
-        const res = await fetch('{enroll_path}', {{
-          method: 'POST',
-          headers: {{'Content-Type': 'application/json'}},
-          body: JSON.stringify(payload),
-        }});
-        if (res.ok) {{
-          const data = await res.json();
-          msg.innerHTML = '<strong>You&apos;re enrolled!</strong> <a href="' + data.pass_url + '">View your card &#8594;</a>';
-          e.target.style.display = 'none';
-        }} else {{
-          const err = await res.json();
-          msg.textContent = 'Error: ' + (err.detail || 'Something went wrong.');
-        }}
-      }} catch(ex) {{
-        msg.textContent = 'Network error — please try again.';
-      }}
-    }});
-  </script>"""
+  <script>{enroll_js}</script>"""
 
     return HTMLResponse(content=_html(business.name, body, bg, fg))
 

@@ -44,3 +44,17 @@ services:
         value: "2"
       - key: WALLET_PROVIDER
         value: stub
+
+      # Email / OTP — set in the Render dashboard; empty falls back to console provider.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: OTP_EXPIRY_MINUTES
+        value: "10"
+      - key: OTP_MAX_ATTEMPTS
+        value: "5"
+
+      # Google OAuth — set in the Render dashboard; empty hides the Google button.
+      - key: GOOGLE_CLIENT_ID
+        sync: false

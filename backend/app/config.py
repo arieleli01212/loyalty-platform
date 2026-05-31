@@ -15,5 +15,14 @@ class Settings(BaseSettings):
     BASE_URL: str = "http://localhost:8000"
     CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"]
 
+    # Email / OTP settings
+    RESEND_API_KEY: str = ""
+    EMAIL_FROM: str = "onboarding@resend.dev"
+    OTP_EXPIRY_MINUTES: int = 10
+    OTP_MAX_ATTEMPTS: int = 5
+
+    # Google OAuth
+    GOOGLE_CLIENT_ID: str = ""
+
 
 settings = Settings()

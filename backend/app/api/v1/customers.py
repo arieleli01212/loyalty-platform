@@ -72,8 +72,8 @@ async def list_customers(
         item = CustomerListItem(
             customer_id=customer.id,
             name=customer.name,
-            contact=customer.contact,
-            contact_type=customer.contact_type,
+            email=customer.email,
+            email_verified=customer.email_verified,
             enrolled_at=customer.enrolled_at,
             enrollment_channel=customer.enrollment_channel,
             current_stamps=card.current_stamps if card else None,
