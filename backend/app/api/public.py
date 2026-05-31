@@ -543,9 +543,14 @@ async def enrollment_landing(
     label = business.label_color or fg
 
     if not program:
+        no_program_logo = (
+            '<img src="' + business.logo_url + '" alt="logo" '
+            'style="max-width:120px;margin-bottom:20px;border-radius:12px;">'
+            if business.logo_url else ""
+        )
         body = f"""
   <div style="text-align:center;max-width:420px;width:100%;">
-    {"<img src=\"" + business.logo_url + "\" alt=\"logo\" style=\"max-width:120px;margin-bottom:20px;border-radius:12px;\">" if business.logo_url else ""}
+    {no_program_logo}
     <h1 style="font-size:1.8rem;font-weight:700;margin-bottom:8px;color:{label};">{business.name}</h1>
     <p style="font-size:1rem;margin-top:24px;opacity:0.7;">
       We are not accepting new enrollments right now.<br>Please check back soon!
