@@ -121,7 +121,7 @@ async def enrollment_landing(
     <h1 style="font-size:1.8rem;font-weight:700;margin-bottom:8px;color:{label};">{business.name}</h1>
     <p style="font-size:1rem;margin-bottom:28px;opacity:0.8;">{program.reward_description}</p>
 
-    <form id="enrollForm"
+    <form id="enrollForm" onsubmit="return false"
           style="display:flex;flex-direction:column;gap:14px;text-align:left;">
       <label style="font-size:0.85rem;font-weight:600;color:{label};">Your Name
         <input name="name" type="text" required placeholder="Jane Smith"
