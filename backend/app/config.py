@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     WALLET_PROVIDER: str = "stub"
     STAMP_THROTTLE_MINUTES: int = 2
+    BASE_URL: str = "http://localhost:8000"
 
 
 settings = Settings()
