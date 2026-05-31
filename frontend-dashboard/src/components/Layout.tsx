@@ -7,6 +7,8 @@ const navItems = [
   { to: '/programs', label: 'Programs' },
   { to: '/customers', label: 'Customers' },
   { to: '/qr', label: 'Enrollment QR' },
+  { to: '/staff', label: 'Staff' },
+  { to: '/scanner', label: 'Scanner' },
 ]
 
 export function Layout() {

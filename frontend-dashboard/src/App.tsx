@@ -8,6 +8,8 @@ import { BrandingPage } from './pages/BrandingPage'
 import { ProgramsPage } from './pages/ProgramsPage'
 import { CustomersPage } from './pages/CustomersPage'
 import { EnrollmentQrPage } from './pages/EnrollmentQrPage'
+import { StaffPage } from './pages/StaffPage'
+import { ScannerPage } from './pages/ScannerPage'
 
 export default function App() {
   return (
@@ -15,6 +17,16 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          {/* Scanner: full-screen, no sidebar */}
+          <Route
+            path="/scanner"
+            element={
+              <AuthGuard>
+                <ScannerPage />
+              </AuthGuard>
+            }
+          />
+          {/* Dashboard: sidebar layout */}
           <Route
             element={
               <AuthGuard>
@@ -27,6 +39,7 @@ export default function App() {
             <Route path="/programs" element={<ProgramsPage />} />
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/qr" element={<EnrollmentQrPage />} />
+            <Route path="/staff" element={<StaffPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -3,7 +3,7 @@ import { useNavigate, Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 export function LoginPage() {
-  const { isAuthenticated, login, register } = useAuth()
+  const { isAuthenticated, role, login, register } = useAuth()
   const navigate = useNavigate()
 
   const [mode, setMode] = useState<'login' | 'register'>('login')
@@ -13,7 +13,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  if (isAuthenticated) return <Navigate to="/" replace />
+  if (isAuthenticated) return <Navigate to={role === 'staff' ? '/scanner' : '/'} replace />
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -22,10 +22,13 @@ export function LoginPage() {
     try {
       if (mode === 'login') {
         await login(email, password)
+        // role state may not have flushed yet — read the value login() stored
+        const storedRole = localStorage.getItem('user_role')
+        navigate(storedRole === 'staff' ? '/scanner' : '/')
       } else {
         await register(email, password, businessName)
+        navigate('/')
       }
-      navigate('/')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {

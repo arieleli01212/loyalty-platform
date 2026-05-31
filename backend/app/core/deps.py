@@ -37,3 +37,15 @@ async def get_current_user(
             detail="User not found",
         )
     return user
+
+
+async def get_owner_user(
+    current_user: MerchantUser = Depends(get_current_user),
+) -> MerchantUser:
+    from app.models.user import UserRole
+    if current_user.role != UserRole.owner:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Owner role required",
+        )
+    return current_user

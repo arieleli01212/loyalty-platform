@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 
 class BusinessRead(BaseModel):
@@ -23,3 +23,17 @@ class BusinessUpdate(BaseModel):
     bg_color: Optional[str] = None
     fg_color: Optional[str] = None
     label_color: Optional[str] = None
+
+
+class StaffCreate(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class StaffOut(BaseModel):
+    id: int
+    email: str
+    role: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
