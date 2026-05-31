@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 
 import qrcode
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response as FastAPIResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select

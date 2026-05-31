@@ -16,7 +16,7 @@ import re
 import httpx
 import qrcode
 from fastapi import APIRouter, Depends
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, Response
 from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -508,9 +508,9 @@ async def wallet_pass_page(
     for i in range(stamps_required):
         filled = i < current
         if filled:
-            slots_html += f'<span style="font-size:1.6rem;line-height:1;">&#9733;</span>'
+            slots_html += '<span style="font-size:1.6rem;line-height:1;">&#9733;</span>'
         else:
-            slots_html += f'<span style="font-size:1.6rem;line-height:1;opacity:0.3;">&#9734;</span>'
+            slots_html += '<span style="font-size:1.6rem;line-height:1;opacity:0.3;">&#9734;</span>'
 
     rewards_banner = ""
     if card.rewards_available > 0:
