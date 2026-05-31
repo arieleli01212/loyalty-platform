@@ -27,10 +27,23 @@ def _normalize_db_url(url: str) -> str:
 
 DATABASE_URL = _normalize_db_url(settings.DATABASE_URL)
 
+# Hosted Postgres (Neon free tier) auto-suspends after ~5 min of inactivity
+# and Render's free web service sleeps after 15 min idle. When either side
+# comes back, the pooled connections SQLAlchemy is holding are already dead,
+# and the next query raises asyncpg's InterfaceError: connection is closed.
+#
+# pool_pre_ping issues a cheap SELECT 1 before handing out a connection and
+# transparently reconnects if the ping fails. pool_recycle proactively
+# replaces connections older than the timeout. Together they make the app
+# robust against both ends going to sleep.
+_is_sqlite = "sqlite" in DATABASE_URL
+
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {},
+    connect_args={"check_same_thread": False} if _is_sqlite else {},
+    pool_pre_ping=not _is_sqlite,
+    pool_recycle=300 if not _is_sqlite else -1,
 )
 
 AsyncSessionLocal = sessionmaker(
