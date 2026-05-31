@@ -1,3 +1,5 @@
+from typing import List
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +13,7 @@ class Settings(BaseSettings):
     WALLET_PROVIDER: str = "stub"
     STAMP_THROTTLE_MINUTES: int = 2
     BASE_URL: str = "http://localhost:8000"
+    CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"]
 
 
 settings = Settings()
