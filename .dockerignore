@@ -1,0 +1,25 @@
+# Keep Docker context lean — anything not listed in the Dockerfile COPY commands
+# is irrelevant to the build.
+
+# Backend cruft
+backend/venv/
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.db
+backend/.pytest_cache/
+
+# Frontend cruft
+frontend-dashboard/node_modules/
+frontend-dashboard/dist/
+frontend-scanner/
+
+# Git / IDE / env / docs
+.git/
+.gitignore
+.env
+.env.*
+.idea/
+.vscode/
+*.md
+docker-compose.yml

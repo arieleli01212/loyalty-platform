@@ -1,4 +1,8 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000'
+// In dev we hit the FastAPI server on a different port; in prod the frontend
+// and backend are served from the same origin, so relative URLs are correct.
+const API_BASE =
+  import.meta.env.VITE_API_BASE ??
+  (import.meta.env.DEV ? 'http://localhost:8000' : '')
 
 function getAccessToken(): string | null {
   return localStorage.getItem('access_token')
